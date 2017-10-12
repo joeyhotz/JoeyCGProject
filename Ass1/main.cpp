@@ -76,7 +76,7 @@ void keyboard(unsigned char key, int x, int y) {
 void init(int argc, char ** argv) {
 	glutInit(&argc, argv);
 
-	myMesh.loadMesh(argc == 2 ? argv[1] : "teapot.obj");
+	myMesh.loadMesh(argc == 2 ? argv[1] : "cubes.obj");
 
 	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
 

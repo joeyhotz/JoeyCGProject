@@ -37,23 +37,34 @@ you are not restricted to the functions shown below.*/
 #include "mesh.h"
 #include <GL/glut.h>
 #include <list>
+#include <string> 
 using namespace std;
 
 void draw(Mesh& m);
 void drawNormals(Mesh& m);
 void drawVertexNormals(Mesh& m);
 void fillCacheForTriangleNormals(Mesh& m);
-void fillCacheForNeighbouringVerticesAndTriangles(Mesh& m);
+void createNeighbourhoodStructure(Mesh& m);
 void fillCacheColourTriangles(Mesh& m);
+void numberOfConnectedComponents(Mesh& m);
+void addToComponent(std::vector<int>& component, std::vector<int>& vertices_done, int vertex);
+void translateComponents();
+void fillCacheColourByComponents(Mesh& m);
+
 
 std::vector<std::vector<int> > vertex_neighbours;
 std::vector<std::vector<int> > vertex_triangles;
+std::vector<std::vector<int> > connected_components;
 std::vector<std::pair<Vec3Df, Vec3Df> > triangle_normals; //barycenter and triangle normal pair
-std::vector<Vec3Df> colours;
+std::vector<Vec3Df> coloursForTriangles;
+std::vector<Vec3Df> coloursForColourByComponents;
+
+
 
 bool draw_normals = false;
 bool draw_vertex_normals = false;
 bool colour_triangles = false;
+bool colour_by_component = false;
 
 /** Function that gets called on keypress 1 */
 void myFunction1(Mesh& m) {
@@ -70,12 +81,15 @@ void myFunction2(Mesh& m) {
 /** Function that gets called on keypress 3 */
 void myFunction3(Mesh& m) {
 	colour_triangles = !colour_triangles;
+	if (colour_by_component) colour_by_component = !colour_by_component;
 	glutPostRedisplay();
 }
 
 /** Function that gets called on keypress 4 */
 void myFunction4(Mesh& m) {
-
+	colour_by_component = !colour_by_component;
+	if (colour_triangles) colour_triangles = !colour_triangles;
+	glutPostRedisplay();
 }
 
 /** Function that gets called on keypress 5 */
@@ -92,28 +106,51 @@ edges or faces for better visualization of the
 results of your functions above. */
 void draw(Mesh& m) {
 	fillCacheForTriangleNormals(m);
-	fillCacheForNeighbouringVerticesAndTriangles(m);
+	createNeighbourhoodStructure(m);
+	numberOfConnectedComponents(m);
 	fillCacheColourTriangles(m);
-	if (colour_triangles == false) {
+	fillCacheColourByComponents(m);
+	if (colour_triangles == false && colour_by_component == false) {
 		glColor3f(1.0, 1.0, 1.0);
 		m.draw();
 	}
-	if (colour_triangles == true) m.drawWithColors(colours);
-
+	if (colour_triangles == true) m.drawWithColors(coloursForTriangles);
 	if (draw_normals == true) drawNormals(m);
 	if (draw_vertex_normals == true) drawVertexNormals(m);
+	if (colour_by_component == true) m.drawWithColors(coloursForColourByComponents);
 }
 
 void fillCacheColourTriangles(Mesh& m) {
-	if (colours.size() == 0) {
-		colours.resize(m.vertices.size());
+	if (coloursForTriangles.size() == 0) {
+		coloursForTriangles.resize(m.vertices.size());
 
 		for (int i = 0; i < m.vertices.size(); i++) {
 			float number_vertices = m.vertices.size();
 			float ratio = 1 / number_vertices;
-			colours[i][0] = 1- ratio*i;
-			colours[i][1] = ratio*i;
-			colours[i][2] = 1;
+			coloursForTriangles[i][0] = 1- ratio*i;
+			coloursForTriangles[i][1] = ratio*i;
+			coloursForTriangles[i][2] = 1;
+		}
+	}
+}
+
+void fillCacheColourByComponents(Mesh& m) {
+	if (coloursForColourByComponents.size() == 0) {
+		coloursForColourByComponents.resize(m.vertices.size());
+		int count = 0;
+
+		for (int c = 0; c < connected_components.size(); c++) {
+			float r = ((double)rand() / (RAND_MAX));
+			float g = ((double)rand() / (RAND_MAX));
+			float b = ((double)rand() / (RAND_MAX));
+
+			for (int i = 0; i < connected_components[c].size(); i++) {
+				//going through each vertex in the component
+				coloursForColourByComponents[count][0] = r;
+				coloursForColourByComponents[count][1] = g;
+				coloursForColourByComponents[count][2] = b;
+				count++;
+			}
 		}
 	}
 }
@@ -135,7 +172,7 @@ void drawVertexNormals(Mesh& m) {
 		}
 
 		vertexNormal.normalize();
-		Vec3Df endpoint = vertex + vertexNormal * 0.1f;
+		Vec3Df endpoint = vertex + vertexNormal * 0.07f;
 
 		glVertex3f(vertex[0], vertex[1], vertex[2]);
 		glVertex3f(endpoint[0], endpoint[1], endpoint[2]);
@@ -190,7 +227,7 @@ void fillCacheForTriangleNormals(Mesh& m) {
 	}
 }
 
-void fillCacheForNeighbouringVerticesAndTriangles(Mesh& m) {
+void createNeighbourhoodStructure(Mesh& m) {
 	if (vertex_triangles.size() == 0) {
 		vertex_neighbours.resize(m.vertices.size());
 		vertex_triangles.resize(m.vertices.size());
@@ -213,6 +250,54 @@ void fillCacheForNeighbouringVerticesAndTriangles(Mesh& m) {
 					if (m.vertices[v3].p != the_vertex) vertex_neighbours[c].push_back(v3);
 				}
 			}
+		}
+	}
+}
+
+void numberOfConnectedComponents(Mesh& m) {
+	std::vector<int> vertices_done;
+	vertices_done.resize(m.vertices.size());
+	fill(vertices_done.begin(), vertices_done.end(), 0);
+
+	if (connected_components.size() == 0) {
+		for (int i = 0; i < m.vertices.size(); i++) {
+			if (vertices_done[i] == 0) {
+				std::vector<int> new_component;
+				new_component.resize(m.vertices.size());
+				std::fill(new_component.begin(), new_component.end(), 0);
+				addToComponent(new_component, vertices_done, i);
+				connected_components.push_back(new_component);
+			}
+		}
+	}
+	translateComponents();
+}
+
+void translateComponents() {
+	//this code just translates the list of components that are binary as to wether the vertex at the position of the list is in the component, and replaces it with the actual index
+
+	std::vector<std::vector<int> > new_connected_component_list;
+	new_connected_component_list.resize(connected_components.size());
+
+	for (int i = 0; i < connected_components.size(); i++) {
+		std::vector<int>& component_to_check = connected_components[i];
+		for (int x = 0; x < component_to_check.size(); x++) {
+			if (component_to_check[x] == 1) {
+				new_connected_component_list[i].push_back(x);
+			}
+		}
+	}
+	connected_components = new_connected_component_list;
+}
+
+void addToComponent(std::vector<int>& component, std::vector<int>& vertices_done, int vertex) {
+
+	component[vertex] = 1;
+	vertices_done[vertex] = 1;
+
+	for (int i = 0; i < vertex_neighbours[vertex].size(); i++) {
+		if (component[vertex_neighbours[vertex][i]] == 0) {
+			addToComponent(component, vertices_done, vertex_neighbours[vertex][i]);
 		}
 	}
 }
