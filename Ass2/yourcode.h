@@ -100,10 +100,17 @@ Vec3Df diffuseOnly(const Vec3Df & vertexPos, Vec3Df & normal, const Vec3Df & lig
 {	
 	Vec3Df directionPointToLight = lightPos - vertexPos;
 	directionPointToLight.normalize();
-	normal.normalize();
-	Vec3Df result = Kd[index] * Vec3Df::crossProduct(normal, directionPointToLight);
 
-	return Vec3Df(result[0], result[1], result[2]);
+	Vec3Df kd = Kd[index];
+	float dotProduct = Vec3Df::dotProduct(normal, directionPointToLight);
+
+	float result0 = kd[0] * dotProduct;
+	float result1 = kd[1] * dotProduct;
+	float result2 = kd[2] * dotProduct;
+
+	Vec3Df resultVector(result0, result1, result2);
+
+	return resultVector;
 }
 
 
