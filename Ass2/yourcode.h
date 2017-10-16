@@ -120,7 +120,18 @@ Vec3Df diffuseOnly(const Vec3Df & vertexPos, Vec3Df & normal, const Vec3Df & lig
 //E.g., for a plane, the light source below the plane cannot cast light on the top, hence, there can also not be any specularity. 
 Vec3Df phongSpecularOnly(const Vec3Df & vertexPos, Vec3Df & normal, const Vec3Df & lightPos, const Vec3Df & cameraPos, unsigned int index)
 {
-	return Vec3Df(0,1,0);
+	Vec3Df ks = Ks[index];
+
+	Vec3Df lightToVertex = lightPos - vertexPos;
+	Vec3Df cameraToVertex = cameraPos - vertexPos;
+	cameraToVertex.normalize();
+	lightToVertex.normalize();
+
+	Vec3Df reflectionVector = -1 * lightToVertex - 2 * Vec3Df::dotProduct(-1 * lightToVertex, normal) * normal;
+	float dotProduct = Vec3Df::dotProduct(cameraToVertex, reflectionVector);
+
+	Vec3Df resultColour = ks * pow(dotProduct, Shininess[index]);
+	return resultColour;
 }
 
 //Blinn-Phong Shading Specularity (http://en.wikipedia.org/wiki/Blinn%E2%80%93Phong_shading_model)
