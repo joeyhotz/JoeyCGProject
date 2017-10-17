@@ -140,7 +140,19 @@ Vec3Df phongSpecularOnly(const Vec3Df & vertexPos, Vec3Df & normal, const Vec3Df
 //The same test as before should be used
 Vec3Df blinnPhongSpecularOnly(const Vec3Df & vertexPos, Vec3Df & normal, const Vec3Df & lightPos, const Vec3Df & cameraPos, unsigned int index)
 {
-	return Vec3Df(0,0,1);
+	Vec3Df lightVector = lightPos - vertexPos;
+	Vec3Df viewVector = cameraPos - vertexPos;
+	Vec3Df sum = lightVector + viewVector;
+	Vec3Df halfwayLightViewVector = sum / sum.getLength();
+	/*lightVector.normalize();
+	viewVector.normalize();
+	halfwayLightViewVector.normalize();*/
+
+	float dotProduct = Vec3Df::dotProduct(normal, halfwayLightViewVector);
+
+	Vec3Df resultColour = Ks[index] * pow(dotProduct, Shininess[index]);
+	
+	return resultColour;
 }
 
 
@@ -156,7 +168,12 @@ Vec3Df blinnPhongSpecularOnly(const Vec3Df & vertexPos, Vec3Df & normal, const V
 //For v=Kd, return (c(N)+c(N+1))/2, else 0.
 Vec3Df toonShadingNoSpecular(const Vec3Df & vertexPos, Vec3Df & normal, const Vec3Df & lightPos, unsigned int index)
 {
-	return Vec3Df(0.5,0.5,0);
+	Vec3Df color = diffuseOnly(vertexPos, normal, lightPos, index);
+	color[0] = floor(color[0] * (float)ToonDiscretize) / (float)ToonDiscretize + 1.0 / ((float)ToonDiscretize * 2.0);
+	color[1] = floor(color[1] * (float)ToonDiscretize) / (float)ToonDiscretize + 1.0 / ((float)ToonDiscretize * 2.0);
+	color[2] = floor(color[2] * (float)ToonDiscretize) / (float)ToonDiscretize + 1.0 / ((float)ToonDiscretize * 2.0);
+
+	return color;
 }
 
 //Toon shading specularity
@@ -164,7 +181,23 @@ Vec3Df toonShadingNoSpecular(const Vec3Df & vertexPos, Vec3Df & normal, const Ve
 //If a channel of Blinn-Phong Specularity has a value bigger or equal to ToonSpecularThreshold, then set it to 1, else to 0.
 Vec3Df toonShadingOnlySpecular(const Vec3Df & vertexPos, Vec3Df & normal, const Vec3Df & lightPos, const Vec3Df & cameraPos, unsigned int index)
 {
-	return Vec3Df(0,0,1);
+	Vec3Df color = phongSpecularOnly(vertexPos, normal, lightPos, cameraPos, index);
+	color[0] = floor(color[0] * (float)ToonDiscretize) / (float)ToonDiscretize + 1.0 / ((float)ToonDiscretize * 2.0);
+	color[1] = floor(color[1] * (float)ToonDiscretize) / (float)ToonDiscretize + 1.0 / ((float)ToonDiscretize * 2.0);
+	color[2] = floor(color[2] * (float)ToonDiscretize) / (float)ToonDiscretize + 1.0 / ((float)ToonDiscretize * 2.0);
+
+	return color;
+}
+
+float abc(float a, float b, float c) {
+	float res1 = (-b + sqrt(pow(b, 2) - 4 * a * c)) / (2 * a);
+	float res2 = (-b - sqrt(pow(b, 2) - 4 * a * c)) / (2 * a);
+	if (res1 > 0) {
+		return res1;
+	}
+	else {
+		return res2;
+	}
 }
 
 
@@ -176,7 +209,15 @@ Vec3Df userInteractionSphere(const Vec3Df & selectedPos, const Vec3Df & camPos)
 	//RETURN the new light position, defined as follows.
 	//selectedPos is a location on the mesh. Use this location to place the light source to cover the location as seen from camPos.
 	//Further, the light should be at a distance of 1.5 from the origin of the scene - in other words, located on a sphere of radius 1.5 around the origin.
-	return Vec3Df(1,1,1);
+	Vec3Df viewVector = camPos - selectedPos;
+
+	float r = 1.5;
+	float a = viewVector.getSquaredLength();
+	float b = 2 * Vec3Df::dotProduct(viewVector, selectedPos);
+	float c = selectedPos.getSquaredLength() - pow(r, 2);
+	float labda = abc(a, b, c);
+	Vec3Df newLightPos = selectedPos + labda * viewVector;
+	return newLightPos;
 }
 
 Vec3Df userInteractionShadow(const Vec3Df & selectedPos, const Vec3Df & selectedNormal, const Vec3Df & lightPos)
@@ -185,7 +226,13 @@ Vec3Df userInteractionShadow(const Vec3Df & selectedPos, const Vec3Df & selected
 	//--- in this way, the shading boundary will be exactly at this location.
 	//there are several ways to do this, choose one you deem appropriate given the current light position
 	//no panic, I will not judge what solution you chose, as long as the above condition is met.
-	return Vec3Df(1,0,1);
+	Vec3Df relativeLightPos = lightPos - selectedPos;
+	Vec3Df projection = relativeLightPos - (Vec3Df::dotProduct(relativeLightPos, selectedNormal) / selectedNormal.getSquaredLength() * selectedNormal);
+	projection.normalize();
+	projection = projection * 1.5;
+	Vec3Df newLightPos = projection + selectedPos;
+
+	return newLightPos;
 }
 
 Vec3Df userInteractionSpecular(const Vec3Df & selectedPos, const Vec3Df & selectedNormal, const Vec3Df & lightPos, const Vec3Df & cameraPos)
@@ -194,5 +241,12 @@ Vec3Df userInteractionSpecular(const Vec3Df & selectedPos, const Vec3Df & select
 	//please ensure also that the light is at a distance of 1 from selectedpos! If the camera is on the wrong side of the surface (normal pointing the other way),
 	//then just return the original light position.
 	//There is only ONE way of doing this!
-	return Vec3Df(0,1,1);
+	Vec3Df d = selectedPos - cameraPos;
+	Vec3Df n = selectedNormal;
+	n.normalize();
+	Vec3Df r = d - 2 * Vec3Df::dotProduct(d, n) * n;
+	r.normalize();
+	Vec3Df result = r + selectedPos;
+
+	return result;
 }
